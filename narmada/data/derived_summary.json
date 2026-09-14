@@ -1,0 +1,39 @@
+{
+  "unit": "MCM",
+  "n_years_defined": 2,
+  "n_years_with_utilizable_flow": 0,
+  "rows": [
+    {
+      "water_year": "1994-95",
+      "assessment_date": "1994-11-01",
+      "remarks": "",
+      "util_major_MCM": null,
+      "util_medium_MCM": null,
+      "util_minor_MCM": null,
+      "util_total_MCM": null,
+      "ssp_rbph_outflow_MCM": null,
+      "ssp_spillage_MCM": null,
+      "ssp_canal_head_MCM": null,
+      "ssp_outflow_total_MCM": null,
+      "live_storage_1nov_MCM": null,
+      "utilizable_flow_total_MCM": null
+    },
+    {
+      "water_year": "1995-96",
+      "assessment_date": "1995-11-01",
+      "remarks": "",
+      "util_major_MCM": null,
+      "util_medium_MCM": null,
+      "util_minor_MCM": null,
+      "util_total_MCM": null,
+      "ssp_rbph_outflow_MCM": null,
+      "ssp_spillage_MCM": null,
+      "ssp_canal_head_MCM": null,
+      "ssp_outflow_total_MCM": null,
+      "live_storage_1nov_MCM": null,
+      "utilizable_flow_total_MCM": null
+    }
+  ],
+  "warnings": [],
+  "forecast": null
+}
