@@ -1,0 +1,4 @@
+water_year,assessment_date,util_major_MCM,util_medium_MCM,util_minor_MCM,util_total_MCM,ssp_rbph_outflow_MCM,ssp_spillage_MCM,ssp_canal_head_MCM,ssp_outflow_total_MCM,live_storage_1nov_MCM,utilizable_flow_total_MCM,remarks
+# Example row (delete this comment line). Units shown as MCM — change to MAF/TMC if your source uses those.
+1994-95,1994-11-01,,,,,,,,,,
+1995-96,1995-11-01,,,,,,,,,,
