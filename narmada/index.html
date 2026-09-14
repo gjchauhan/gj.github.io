@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Narmada Basin — Utilizable Flow Monitor</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1a2230; --muted:#5b6b82;
+    --line:#e2e7ee; --accent:#1c6ea4; --accent2:#2e9e6b; --warn:#b26b00;
+    --grid:#eef1f5;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0f141b; --card:#161d27; --ink:#e7edf5; --muted:#93a1b5;
+           --line:#26303d; --accent:#4aa8e0; --accent2:#4fc48a; --warn:#e0a24a;
+           --grid:#1e2833; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:1.5rem;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 24px}
+  .cards{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        padding:16px 18px;flex:1 1 200px}
+  .card .k{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}
+  .card .v{font-size:1.7rem;font-weight:650;margin-top:4px}
+  .card .u{font-size:.85rem;color:var(--muted);font-weight:400}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+         padding:18px;margin-bottom:22px}
+  .panel h2{font-size:1.05rem;margin:0 0 14px}
+  .banner{background:color-mix(in srgb,var(--warn) 14%,transparent);
+          border:1px solid var(--warn);color:var(--ink);
+          border-radius:10px;padding:14px 16px;margin-bottom:22px}
+  table{width:100%;border-collapse:collapse;font-size:.86rem}
+  th,td{padding:7px 9px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;position:sticky;top:0;background:var(--card)}
+  .scroll{overflow-x:auto}
+  .chartbox{overflow-x:auto}
+  svg{max-width:100%;height:auto;display:block}
+  .foot{color:var(--muted);font-size:.8rem;margin-top:30px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Narmada Basin — Utilizable Flow Monitor</h1>
+  <p class="sub">Year-by-year utilisation, SSP outflow (RBPH + spillage) and total utilizable flow. Units: MCM.</p>
+
+  <div id="banner"></div>
+  <div class="cards" id="cards"></div>
+
+  <div class="panel">
+    <h2>Utilizable flow by water year</h2>
+    <div class="chartbox" id="chart"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Full statement</h2>
+    <div class="scroll"><table id="table"></table></div>
+  </div>
+
+  <p class="foot">
+    Data source: <code>narmada/data/utilizable_flow_statement.csv</code> →
+    processed by <code>narmada/analysis/model.py</code> into
+    <code>derived_summary.json</code>. Baseline forecast is a linear trend and
+    is refined as the full historical series is loaded.
+  </p>
+</div>
+
+<script>
+const FMT = n => n===null||n===undefined ? "—" : n.toLocaleString(undefined,{maximumFractionDigits:0});
+
+async function load(){
+  let data;
+  try{
+    const r = await fetch("data/derived_summary.json",{cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    data = await r.json();
+  }catch(e){
+    document.getElementById("banner").innerHTML =
+      '<div class="banner">Could not load <code>data/derived_summary.json</code>. '
+      +'Run <code>python3 narmada/analysis/model.py</code> after adding data.</div>';
+    return;
+  }
+  render(data);
+}
+
+function render(d){
+  const rows = d.rows || [];
+  const filled = rows.filter(r => r.utilizable_flow_total_MCM !== null);
+
+  // Banner: empty-state or warnings.
+  const b = document.getElementById("banner");
+  if(filled.length === 0){
+    b.innerHTML = '<div class="banner"><strong>No data yet.</strong> '
+      +'The structure is ready — add year-by-year figures to '
+      +'<code>utilizable_flow_statement.csv</code> and re-run the analysis. '
+      +'Charts and forecast appear automatically.</div>';
+  }else if((d.warnings||[]).length){
+    b.innerHTML = '<div class="banner"><strong>Consistency notes:</strong><br>'
+      + d.warnings.join("<br>") + '</div>';
+  }
+
+  // Stat cards.
+  const latest = filled[filled.length-1];
+  const fc = d.forecast;
+  const cards = [
+    ["Years with data", filled.length, ""],
+    ["Latest year", latest ? latest.water_year : "—", ""],
+    ["Latest utilizable flow", latest ? FMT(latest.utilizable_flow_total_MCM) : "—", "MCM"],
+    ["Next-year forecast", fc ? FMT(fc.prediction_MCM) : "—", fc ? "MCM (baseline)" : ""],
+  ];
+  document.getElementById("cards").innerHTML = cards.map(([k,v,u])=>
+    `<div class="card"><div class="k">${k}</div>`
+    +`<div class="v">${v} <span class="u">${u}</span></div></div>`).join("");
+
+  drawChart(filled, fc);
+  drawTable(rows);
+}
+
+function drawChart(filled, fc){
+  const box = document.getElementById("chart");
+  if(filled.length < 1){ box.innerHTML = '<p style="color:var(--muted)">Chart appears once data is added.</p>'; return; }
+  const W=960, H=360, m={t:16,r:16,b:44,l:60};
+  const pts = filled.map((r,i)=>({x:i, y:r.utilizable_flow_total_MCM, label:r.water_year}));
+  if(fc) pts.push({x:pts.length, y:fc.prediction_MCM, label:"next*", forecast:true});
+  const ys = pts.map(p=>p.y);
+  const ymax = Math.max(...ys)*1.1 || 1, ymin = 0;
+  const xN = Math.max(pts.length-1,1);
+  const px = i => m.l + (W-m.l-m.r) * (i/xN);
+  const py = y => H-m.b - (H-m.t-m.b) * ((y-ymin)/(ymax-ymin));
+
+  let g = "";
+  for(let t=0;t<=4;t++){
+    const yv = ymin + (ymax-ymin)*t/4, y = py(yv);
+    g += `<line x1="${m.l}" y1="${y}" x2="${W-m.r}" y2="${y}" stroke="var(--grid)"/>`;
+    g += `<text x="${m.l-8}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--muted)">${FMT(yv)}</text>`;
+  }
+  const line = pts.filter(p=>!p.forecast).map((p,i)=>`${i?"L":"M"}${px(p.x)},${py(p.y)}`).join(" ");
+  let dots = pts.map(p=>
+    `<circle cx="${px(p.x)}" cy="${py(p.y)}" r="4" fill="${p.forecast?'var(--warn)':'var(--accent)'}"><title>${p.label}: ${FMT(p.y)} MCM</title></circle>`).join("");
+  // forecast connector
+  let fline = "";
+  if(fc && pts.length>=2){
+    const a=pts[pts.length-2], b=pts[pts.length-1];
+    fline = `<line x1="${px(a.x)}" y1="${py(a.y)}" x2="${px(b.x)}" y2="${py(b.y)}" stroke="var(--warn)" stroke-dasharray="5 4"/>`;
+  }
+  const step = Math.ceil(pts.length/12);
+  const xlab = pts.map((p,i)=> (i%step===0||i===pts.length-1)
+    ? `<text x="${px(p.x)}" y="${H-m.b+18}" text-anchor="middle" font-size="11" fill="var(--muted)">${p.label}</text>`:"").join("");
+
+  box.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Utilizable flow by year">`
+    + g + fline
+    + `<path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5"/>`
+    + dots + xlab
+    + `</svg>`
+    + (fc?'<p style="color:var(--muted);font-size:.8rem;margin:.4rem 0 0">* baseline linear-trend forecast</p>':'');
+}
+
+function drawTable(rows){
+  const cols = [
+    ["water_year","Year"],["util_major_MCM","Major"],["util_medium_MCM","Medium"],
+    ["util_minor_MCM","Minor"],["util_total_MCM","Util. total"],
+    ["ssp_rbph_outflow_MCM","RBPH"],["ssp_spillage_MCM","Spillage"],
+    ["ssp_outflow_total_MCM","SSP outflow"],["live_storage_1nov_MCM","Live stor."],
+    ["utilizable_flow_total_MCM","Utilizable flow"],
+  ];
+  const head = "<thead><tr>"+cols.map(c=>`<th>${c[1]}</th>`).join("")+"</tr></thead>";
+  const body = "<tbody>"+rows.map(r=>"<tr>"+cols.map(c=>{
+    const v = r[c[0]];
+    return `<td>${c[0]==="water_year" ? (v||"—") : FMT(v)}</td>`;
+  }).join("")+"</tr>").join("")+"</tbody>";
+  document.getElementById("table").innerHTML = head+body;
+}
+
+load();
+</script>
+</body>
+</html>
